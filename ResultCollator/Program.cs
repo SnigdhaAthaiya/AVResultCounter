@@ -15,11 +15,13 @@ namespace ResultCollator
         private static string angelFname = "Angelic";
         private static string traceFname = "Trace";
         private static string cpuTimeStr = "Cpu(s) :";
+        private static string favCpuTimeStr = "fastavn(s) :";
         private static string corralTimeStr = "run.corral(s) :";
         private static string eeTimeStr = "explain.error(s) :";
         private static string infoFolder = "Info";
         private static string infoFile = "dependencyInfo.txt";
         private static string resFolder = "FAVResults";
+        private static string procInlineStr = "Number of procedures inlined: ";
         private static string cpuRes = "cpuTime.txt";
         private static string corralRes = "corralTime.txt";
         private static string eeRes = "eeTime.txt";
@@ -43,15 +45,24 @@ namespace ResultCollator
 
         static void Main(string[] args)
         {
-            if (args.Length != 1)
+            if (args.Length != 4)
             {
-                Console.WriteLine("Usage: <Directory Name>");
+                Console.WriteLine("Usage: <Source Directory Name> <Dir1> <Dir2> <Result Folder Name> ");
+                Console.WriteLine("args = {0}", args);
+                foreach (var arg in args)
+                    Console.WriteLine(arg);
                 return;
             }
 
             string parentDir = args[0];
+            withoutDep = args[1];
+            withDep = args[2];
+            resFolder = args[3];
 
-            foreach(var dir in Directory.EnumerateDirectories(parentDir))
+            Console.WriteLine("Folder 1 : {0}", withoutDep);
+            Console.WriteLine("Folder 2 : {0}", withDep);
+
+            foreach (var dir in Directory.EnumerateDirectories(parentDir))
             {
                 string benchName = extractEpNameFromDir(dir);
                 Console.WriteLine("\nBenchmark : {0}", benchName);
@@ -87,164 +98,161 @@ namespace ResultCollator
         //this method will extract and finally print all the metrics
         private static void printStats(string benchmarkDir, HashSet<string> entrypoints, string resultsDir)
         {
-            string dirWithout = Path.Combine(benchmarkDir, withoutDep);
-            string dirWith = Path.Combine(benchmarkDir, withDep);
+            string dir1 = Path.Combine(benchmarkDir, withoutDep);
+            string dir2 = Path.Combine(benchmarkDir, withDep);
 
             //cpu stats
             Dictionary<string, Tuple<Stats, Stats>> finalStats = new Dictionary<string, Tuple<Stats, Stats>>();
-            double totalCpuTimeWithout = 0.0;
-            double totalCpuTimeWith = 0.0;
+            double totalCpuTime1 = 0.0;
+            double totalCpuTime2 = 0.0;
 
             //FastAVN timeout 
-            bool favTOWithout = false;
-            bool favTOWith = false;
+            bool favTO1 = false;
+            bool favTO2 = false;
 
             //corral TO
-            int epTOWithout = 0;
-            int epTOWith = 0;
+            int epTO1 = 0;
+            int epTO2 = 0;
 
             //corral time
-            double totalCorralTimeWithout = 0;
-            double totalCorralTimeWith = 0;
+            double totalCorralTime1 = 0;
+            double totalCorralTime2 = 0;
 
             //ee time
-            double totalEETimeWithout = 0;
-            double totalEETimeWith = 0;
+            double totalEETime1 = 0;
+            double totalEETime2 = 0;
 
             //corral iter time
-            double totalCorralIterTimeWithout = 0;
-            double totalCorralIterTimeWith = 0;
+            double totalCorralIterTime1 = 0;
+            double totalCorralIterTime2 = 0;
 
             //total angelic bugs reported
-            int totalAngelicBugsWithout = 0;
-            int totalAngelicBugsWith = 0;
+            int totalAngelicBugs1 = 0;
+            int totalAngelicBugs2 = 0;
 
             //total blocks reported
-            int totalBlocksWithout = 0;
-            int totalBlocksWith = 0;
+            int totalBlocks1 = 0;
+            int totalBlocks2 = 0;
 
             //assertions checked in total
-            int totalAssertsWithout = 0;
-            int totalAssertsWith = 0;
+            int totalAsserts1 = 0;
+            int totalAsserts2 = 0;
 
-            //cumulative length of the traces - means the stack length
-            int totalALWithout = 0;
-            int totalALWith = 0;
+            //procs inlined total
+            int totalProcsInlined1 = 0;
+            int totalProcsInlined2 = 0;
+           
 
 
-
-            string favOutFileWithout = Path.Combine(dirWithout, favOut);
-            string favOutFileWith = Path.Combine(dirWith, favOut);
+            string favOutFile1 = Path.Combine(dir1, favOut);
+            string favOutFile2 = Path.Combine(dir2, favOut);
             List<string> epWithSkipped = new List<string>();
 
 
-            favTOWithout = checkFavTO(favOutFileWithout);
-            favTOWith = checkFavTO(favOutFileWith);
-            epWithSkipped = getSkippedEP(favOutFileWith);
+            favTO1 = checkFavTO(favOutFile1);
+            favTO2 = checkFavTO(favOutFile2);
+            epWithSkipped = getSkippedEP(favOutFile2);
 
-            List<string> epFAVTOWithout = new List<string>();
-            List<string> epFAVTOWith = new List<string>();
+            totalCpuTime1 = getCPUTime(favOutFile1);
+            totalCpuTime2 = getCPUTime(favOutFile2);
+
+            List<string> epFAVTO1 = new List<string>();
+            List<string> epFAVTO2 = new List<string>();
            
             foreach (var ep in entrypoints)
             {
                 try
                 {
-                    string epDirWithout = Path.Combine(dirWithout, ep);
-                    string epDirWith = Path.Combine(dirWith, ep);
+                    string epDir1 = Path.Combine(dir1, ep);
+                    string epDir2 = Path.Combine(dir2, ep);
                     
                     //getting stdout.txt
-                    string avOutFileWithout = Path.Combine(epDirWithout, avOut);
-                    string avOutFileWith = Path.Combine(epDirWith, avOut);
+                    string avOutFile1 = Path.Combine(epDir1, avOut);
+                    string avOutFile2 = Path.Combine(epDir2, avOut);
 
-                   //getting avanResults.txt
-                    string avnresFileWithout = Path.Combine(epDirWithout, avnresFile);
-                    string avnresFileWith = Path.Combine(epDirWith, avnresFile);
+                   //getting avnResults.txt
+                    string avnresFile1 = Path.Combine(epDir1, avnresFile);
+                    string avnresFile2 = Path.Combine(epDir2, avnresFile);
 
                     //getting the traceLengths.txt file
-                    string traceLengthFileWithout = Path.Combine(epDirWithout, traceLenFile);
-                    string traceLengthFileWith = Path.Combine(epDirWith, traceLenFile);
+                   // string traceLengthFileWithout = Path.Combine(epDirWithout, traceLenFile);
+                   // string traceLengthFileWith = Path.Combine(epDirWith, traceLenFile);
 
 
-                    Stats statsWithout = new Stats(ep);
-                    Stats statsWith = new Stats(ep);
+                    Stats stats1 = new Stats(ep);
+                    Stats stats2 = new Stats(ep);
 
-                    if (!Directory.Exists(epDirWithout))
+                    if (!Directory.Exists(epDir1) || !File.Exists(avOutFile1) || !runCompleted(avOutFile1))
                     {
-                        epFAVTOWithout.Add(ep);
+                        epFAVTO1.Add(ep);
                     }
 
-                    if(!Directory.Exists(epDirWith) && !epWithSkipped.Contains(ep))
+                    // TODO check stdout result instead of checking just directory
+                    if(!epWithSkipped.Contains(ep) && (!Directory.Exists(epDir2)  || (!File.Exists(avOutFile2)) || !runCompleted(avOutFile2) ))
                     {
-                        epFAVTOWith.Add(ep);
+                        epFAVTO2.Add(ep);
                     }
 
-                    if (File.Exists(avOutFileWithout))
+                    if (File.Exists(avOutFile1))
                     {
-                        statsWithout = getStdOutMetrics(statsWithout, avOutFileWithout);
+                        stats1 = getStdOutMetrics(stats1, avOutFile1);
                        
                     }
 
-                    if(File.Exists(avOutFileWith))
+                    if(File.Exists(avOutFile2))
                     {
-                        statsWith = getStdOutMetrics(statsWith, avOutFileWith);
+                        stats2 = getStdOutMetrics(stats2, avOutFile2);
                     }
 
-                    if(File.Exists(avnresFileWithout))
+                    if(File.Exists(avnresFile1))
                     {
-                        statsWithout.Asserts = getAssertsChecked(avnresFileWithout);
-                        totalAssertsWithout += statsWithout.Asserts;
+                        stats1.Asserts = getAssertsChecked(avnresFile1);
+                        totalAsserts1 += stats1.Asserts;
                     }
 
-                    if(File.Exists(avnresFileWith))
+                    if(File.Exists(avnresFile2))
                     {
-                        statsWith.Asserts = getAssertsChecked(avnresFileWith);
-                        totalAssertsWith += statsWith.Asserts;
+                        stats2.Asserts = getAssertsChecked(avnresFile2);
+                        totalAsserts2 += stats2.Asserts;
                     }
 
+                    if (stats1.CorralTime != -1 )
+                        totalCorralTime1 += stats1.CorralTime;
+                    
+                    if (stats2.CorralTime != -1)
+                        totalCorralTime2 += stats2.CorralTime;
+                    
 
-                    if (statsWithout.CpuTime != -1)
-                    {
-                        totalCpuTimeWithout += statsWithout.CpuTime;
-                        totalCpuTimeWith += statsWith.CpuTime;
-                    }
+                    if (stats1.CorralIterTime != -1 )
+                        totalCorralIterTime1 += stats1.CorralIterTime;
 
-                    if (statsWithout.CorralTime != -1 )
-                    {
-                        totalCorralTimeWithout += statsWithout.CorralTime;
-                        totalCorralTimeWith += statsWith.CorralTime;
-                    }
+                    if (stats2.CorralIterTime != -1)
+                        totalCorralIterTime2 += stats2.CorralIterTime;
+                    
 
-                    if (statsWithout.CorralIterTime != -1 )
-                    {
-                        totalCorralIterTimeWithout += statsWithout.CorralIterTime;
-                        totalCorralIterTimeWith += statsWith.CorralIterTime;
-                    }
+                    if (stats1.EeTime != -1 )
+                        totalEETime1 += stats1.EeTime;
 
-                    if (statsWithout.EeTime != -1 )
-                    {
-                        totalEETimeWithout += statsWithout.EeTime;
-                        totalEETimeWith += statsWith.EeTime;
-                    }
+                    if (stats2.EeTime != -1)
+                        totalEETime2 += stats2.EeTime;
+                    
 
-                    if (statsWithout.CorralTO)
-                        epTOWithout++;
+                    if (stats1.CorralTO)
+                        epTO1++;
 
-                    if (statsWith.CorralTO)
-                        epTOWith++;
+                    if (stats2.CorralTO)
+                        epTO2++;
 
-                    totalAngelicBugsWithout += statsWithout.Bugs;
-                    totalAngelicBugsWith += statsWith.Bugs;
+                    totalAngelicBugs1 += stats1.Bugs;
+                    totalAngelicBugs2 += stats2.Bugs;
 
-                    totalBlocksWithout += statsWithout.Blocks;
-                    totalBlocksWith += statsWith.Blocks;
+                    totalBlocks1 += stats1.Blocks;
+                    totalBlocks2 += stats2.Blocks;
 
-
-                    statsWithout.AngelicLen= getAngelicLength(epDirWithout, traceLengthFileWithout);
-                    statsWith.AngelicLen = getAngelicLength(epDirWith, traceLengthFileWith);
-                    totalALWithout += statsWithout.AngelicLen;
-                    totalALWith += statsWith.AngelicLen;
-
-                    finalStats.Add(ep, new Tuple<Stats, Stats>(statsWithout, statsWith));
+                    totalProcsInlined1 += stats1.ProcsInlined;
+                    totalProcsInlined2 += stats2.ProcsInlined;
+                   
+                    finalStats.Add(ep, new Tuple<Stats, Stats>(stats1, stats2));
 
                 }
                 catch (Exception e)
@@ -264,78 +272,78 @@ namespace ResultCollator
                 string blockfname = Path.Combine(resultsDir, "blocksnum.txt");
                 string assertsCheckedFname = Path.Combine(resultsDir, "assertsConsidered.txt");
                 string angelicLengthFname = Path.Combine(resultsDir, "traceLength.txt");
-
+                string procInlineFname =Path.Combine(resultsDir, "procsInlined.txt");
 
                 File.AppendAllText(summaryFile, "Summarized results \n");
 
                 Console.WriteLine();
-                Console.WriteLine("Did Fast AVN timeout in without dep  :  " + favTOWithout);
-                Console.WriteLine("Did fast AVN timeout in with : " + favTOWith);
-                File.AppendAllText(summaryFile,"Did Fast AVN timeout in without dep  :  " + favTOWithout + "\n");
-                File.AppendAllText(summaryFile, "Entrypoints not covered due to global time out: " + epFAVTOWithout.Count + "\n");
-                File.AppendAllLines(summaryFile, epFAVTOWithout);
+                Console.WriteLine("Did Fast AVN timeout in 1  :  " + favTO1);
+                Console.WriteLine("Did fast AVN timeout in 2 : " + favTO2);
+                File.AppendAllText(summaryFile,"Did Fast AVN timeout in 1  :  " + favTO1 + "\n");
+                File.AppendAllText(summaryFile, "Entrypoints not covered due to global time out: " + epFAVTO1.Count + "\n");
+                File.AppendAllLines(summaryFile, epFAVTO1);
                 File.AppendAllText(summaryFile,"\n");
-                File.AppendAllText(summaryFile, "Did fast AVN timeout in with : " + favTOWith + "\n");
-                File.AppendAllText(summaryFile, "Entrypoints not covered due to global time out in with:"+ epFAVTOWith.Count + "\n");
-                File.AppendAllLines(summaryFile, epFAVTOWith);
-                File.AppendAllText(summaryFile, "\nentrypoints skipped in with dep, as part of optimization : " + epWithSkipped.Count + "\n");
+                File.AppendAllText(summaryFile, "Did fast AVN timeout in 2 : " + favTO2 + "\n");
+                File.AppendAllText(summaryFile, "Entrypoints not covered due to global time out in 2:"+ epFAVTO2.Count + "\n");
+                File.AppendAllLines(summaryFile, epFAVTO2);
+                File.AppendAllText(summaryFile, "\nentrypoints skipped in 2, as part of optimization : " + epWithSkipped.Count + "\n");
                 File.AppendAllLines(summaryFile, epWithSkipped);
 
 
                 Console.WriteLine();
-                Console.WriteLine("Number of entry points timing out due to corral in without :  {0}", epTOWithout);
-                Console.WriteLine("Number of entry points timing out due to corral in with :  {0}", epTOWith);
-                File.AppendAllText(summaryFile, "Number of entry points timing out due to corral in without : " + epTOWithout + "\n");
-                File.AppendAllText(summaryFile, "Number of entry points timing out due to corral in with : "+ epTOWith + "\n");
+                Console.WriteLine("Number of entry points timing out due to corral in 1 :  {0}", epTO1);
+                Console.WriteLine("Number of entry points timing out due to corral in 2 :  {0}", epTO2);
+                File.AppendAllText(summaryFile, "Number of entry points timing out due to corral in 1 : " + epTO1 + "\n");
+                File.AppendAllText(summaryFile, "Number of entry points timing out due to corral in 2 : "+ epTO2 + "\n");
 
                 Console.WriteLine();
-                Console.WriteLine("total CPU time without dependence : = " + totalCpuTimeWithout + "\n");
-                Console.WriteLine("total CPU time with dependence : = " + totalCpuTimeWith + "\n");
-                File.AppendAllText(summaryFile, "total CPU time without dependence : = " + totalCpuTimeWithout + "\n");
-                File.AppendAllText(summaryFile, "total CPU time with dependence : = " + totalCpuTimeWith + "\n");
+                Console.WriteLine("total CPU time 1 : = " + totalCpuTime1 + "\n");
+                Console.WriteLine("total CPU time 2 : = " + totalCpuTime2 + "\n");
+                File.AppendAllText(summaryFile, "total CPU time 1 : = " + totalCpuTime1 + "\n");
+                File.AppendAllText(summaryFile, "total CPU time 2 : = " + totalCpuTime2 + "\n");
 
 
                 Console.WriteLine();
-                Console.WriteLine("total Corral time without dependence : = " + totalCorralTimeWithout);
-                Console.WriteLine("total Corral time with dependence : = " + totalCorralTimeWith);
-                File.AppendAllText(summaryFile, "total Corral time without dependence : = " + totalCorralTimeWithout + "\n");
-                File.AppendAllText(summaryFile, "total Corral time with dependence : = " + totalCorralTimeWith + "\n");
+                Console.WriteLine("total Corral time 1 : = " + totalCorralTime1);
+                Console.WriteLine("total Corral time 2 : = " + totalCorralTime2);
+                File.AppendAllText(summaryFile, "total Corral time 1 : = " + totalCorralTime1 + "\n");
+                File.AppendAllText(summaryFile, "total Corral time 2 : = " + totalCorralTime2 + "\n");
 
                 Console.WriteLine();
-                Console.WriteLine("total Corral Iter time without dependence : = " + totalCorralIterTimeWithout);
-                Console.WriteLine("total Corral Iter time with dependence : = " + totalCorralIterTimeWith);
-                File.AppendAllText(summaryFile, "total Corral Iter time without dependence : = " + totalCorralIterTimeWithout + "\n");
-                File.AppendAllText(summaryFile, "total Corral Iter time with dependence : = " + totalCorralIterTimeWith + "\n");
+                Console.WriteLine("total Corral Iter time 1 : = " + totalCorralIterTime1);
+                Console.WriteLine("total Corral Iter time 2 : = " + totalCorralIterTime2);
+                File.AppendAllText(summaryFile, "total Corral Iter time 1 : = " + totalCorralIterTime1 + "\n");
+                File.AppendAllText(summaryFile, "total Corral Iter time 2 : = " + totalCorralIterTime2 + "\n");
 
                 Console.WriteLine();
-                Console.WriteLine("total EE time without dependence : = " + totalEETimeWithout);
-                Console.WriteLine("total EE time with dependence : = " + totalEETimeWith);
-                File.AppendAllText(summaryFile, "total EE time without dependence : = " + totalEETimeWithout + "\n");
-                File.AppendAllText(summaryFile, "total EE time with dependence : = " + totalEETimeWith + "\n");
+                Console.WriteLine("total EE time 1 : = " + totalEETime1);
+                Console.WriteLine("total EE time 2 : = " + totalEETime2);
+                File.AppendAllText(summaryFile, "total EE time 1 : = " + totalEETime1 + "\n");
+                File.AppendAllText(summaryFile, "total EE time 2 : = " + totalEETime2 + "\n");
 
                 Console.WriteLine();
-                Console.WriteLine("total Angelic bugs  without dependence : = " + totalAngelicBugsWithout);
-                Console.WriteLine("total angelic bugs with dependence : = " + totalAngelicBugsWith);
-                File.AppendAllText(summaryFile, "total Angelic bugs  without dependence : = " + totalAngelicBugsWithout + "\n");
-                File.AppendAllText(summaryFile, "total angelic bugs with dependence : = " + totalAngelicBugsWith + "\n");
+                Console.WriteLine("total Angelic bugs  1 : = " + totalAngelicBugs1);
+                Console.WriteLine("total angelic bugs 2 : = " + totalAngelicBugs2);
+                File.AppendAllText(summaryFile, "total Angelic bugs  1 : = " + totalAngelicBugs1 + "\n");
+                File.AppendAllText(summaryFile, "total angelic bugs 2 : = " + totalAngelicBugs2 + "\n");
 
                 Console.WriteLine();
-                Console.WriteLine("total Blocks without dependence : = " + totalBlocksWithout);
-                Console.WriteLine("total Blocks with dependence : = " + totalBlocksWith);
-                File.AppendAllText(summaryFile, "total Blocks without dependence : = " + totalBlocksWithout + "\n");
-                File.AppendAllText(summaryFile, "total Blocks with dependence : = " + totalBlocksWith + "\n");
+                Console.WriteLine("total Blocks 1 : = " + totalBlocks1);
+                Console.WriteLine("total Blocks 2 : = " + totalBlocks2);
+                File.AppendAllText(summaryFile, "total Blocks 1 : = " + totalBlocks1 + "\n");
+                File.AppendAllText(summaryFile, "total Blocks 2 : = " + totalBlocks2 + "\n");
 
                 Console.WriteLine();
-                Console.WriteLine("total asserts considered without dependence : = " + totalAssertsWithout);
-                Console.WriteLine("total asserts considered with dependence : = " + totalAssertsWith);
-                File.AppendAllText(summaryFile, "total asserts considered without dependence : = " + totalAssertsWithout + "\n");
-                File.AppendAllText(summaryFile, "total asserts considered with dependence : = " + totalAssertsWith + "\n");
+                Console.WriteLine("total procedures inlined 1 : = " + totalProcsInlined1);
+                Console.WriteLine("total procedures inlined 2 : = " + totalProcsInlined2);
+                File.AppendAllText(summaryFile, "total procedures inlined 1 : = " + totalProcsInlined1 + "\n");
+                File.AppendAllText(summaryFile, "total procedures inlined 2 : = " + totalProcsInlined2 + "\n");
 
                 Console.WriteLine();
-                Console.WriteLine("total trace length without dependence : = " + totalALWithout);
-                Console.WriteLine("total trace length with dependence : = " + totalALWith);
-                File.AppendAllText(summaryFile, "total trace length without dependence : = " + totalALWithout + "\n");
-                File.AppendAllText(summaryFile, "total trace length with dependence : = " + totalALWith + "\n");
+                Console.WriteLine("total asserts checked 1 : = " + totalAsserts1);
+                Console.WriteLine("total asserts checked 2 : = " + totalAsserts2);
+                File.AppendAllText(summaryFile, "total asserts checked 1 : = " + totalAsserts1 + "\n");
+                File.AppendAllText(summaryFile, "total asserts checked 2 : = " + totalAsserts2 + "\n");
 
 
                 foreach (var entry in finalStats)
@@ -347,10 +355,34 @@ namespace ResultCollator
                     File.AppendAllText(angBugFname, entry.Key + " : " + entry.Value.Item1.Bugs + "\t || \t" + entry.Value.Item2.Bugs + "\n");
                     File.AppendAllText(blockfname, entry.Key + " : " + entry.Value.Item1.Blocks + "\t || \t" + entry.Value.Item2.Blocks + "\n");
                     File.AppendAllText(assertsCheckedFname, entry.Key + " : " + entry.Value.Item1.Asserts + "\t || \t" + entry.Value.Item2.Asserts + "\n");
-                    File.AppendAllText(angelicLengthFname, entry.Key + " : " + entry.Value.Item1.AngelicLen + "\t || \t" + entry.Value.Item2.AngelicLen + "\n");
+                    File.AppendAllText(procInlineFname, entry.Key + " : " + entry.Value.Item1.ProcsInlined + "\t || \t" + entry.Value.Item2.ProcsInlined + "\n");
+                    //  File.AppendAllText(angelicLengthFname, entry.Key + " : " + entry.Value.Item1.AngelicLen + "\t || \t" + entry.Value.Item2.AngelicLen + "\n");
                 }
             }
 
+        }
+
+        private static bool runCompleted(string avOutFileName)
+        {
+            bool result = false;
+            string lastLine = "[TAG: AV_STATS] TotalTime(ms) :";
+            try
+            {
+                string[] lines = File.ReadAllLines(avOutFileName);
+                for(int i = lines.Length - 1 ; i >=0; i--)
+                {
+                    if(lines[i].Contains(lastLine))
+                    {
+                        result = true;
+                        break;
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine("Error in runCompleted : {0}", e.Message);
+            }
+            return result;
         }
 
         private static int getAngelicLength(string epDir, string tFilename)
@@ -470,13 +502,7 @@ namespace ResultCollator
 
                 foreach (var line in avOutLines)
                 {
-                    if (line.Contains(cpuTimeStr))
-                    {
-                        int index = line.IndexOf(cpuTimeStr) + cpuTimeStr.Length;
-                        string value = line.Substring(index).Trim();
-                        statOb.CpuTime = double.Parse(value);
-                        continue;
-                    }
+                    
                     if(line.Contains(corralTimeStr))
                     {
                         int index = line.IndexOf(corralTimeStr) + corralTimeStr.Length;
@@ -516,6 +542,14 @@ namespace ResultCollator
                     if (line.Contains(corralTOStr))
                     {
                         statOb.CorralTO = true;
+                        continue;
+                    }
+                    if (line.Contains(procInlineStr))
+                    {
+                        int index = line.IndexOf(procInlineStr) + procInlineStr.Length;
+                        string value = line.Substring(index).Trim();
+                        statOb.ProcsInlined += int.Parse(value);
+                        
                     }
 
                 }
@@ -530,19 +564,20 @@ namespace ResultCollator
             return statOb;
         }
 
-        private static double getCPUTime(string avOutFileName)
+        private static double getCPUTime(string outFileName)
         {
             double time = -1;
             try
             {
 
-                string[] avOutLines = File.ReadAllLines(avOutFileName);
+                string[] lines = File.ReadAllLines(outFileName);
 
-                foreach (var line in avOutLines)
+                for(int i = lines.Length -1; i>=0; i--)
                 {
-                    if (line.Contains(cpuTimeStr))
+                    string line = lines[i];
+                    if (line.Contains(favCpuTimeStr))
                     {
-                        int index = line.IndexOf(cpuTimeStr) + cpuTimeStr.Length;
+                        int index = line.IndexOf(favCpuTimeStr) + favCpuTimeStr.Length;
                         string value = line.Substring(index).Trim();
                         time = double.Parse(value);
                         break;
@@ -552,7 +587,7 @@ namespace ResultCollator
             }
             catch (Exception e)
             {
-                Console.WriteLine("trouble with file {0} : {1}", avOutFileName, e.Message);
+                Console.WriteLine("trouble with file {0} : {1}", outFileName, e.Message);
 
             }
 
@@ -617,6 +652,7 @@ namespace ResultCollator
         int asserts = 0;
         int angelicLen = 0;
         bool corralTO = false;
+        int procsInlined = 0;
         
 
         public Stats(string ep)
@@ -635,6 +671,7 @@ namespace ResultCollator
         public int Asserts { get => asserts; set => asserts = value; }
         public int AngelicLen { get => angelicLen; set => angelicLen = value; }
         public bool CorralTO { get => corralTO; set => corralTO = value; }
+        public int ProcsInlined { get => procsInlined; set => procsInlined = value; }
     }
 
 }
